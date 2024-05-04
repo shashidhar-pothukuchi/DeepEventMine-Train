@@ -7,6 +7,7 @@ from collections import OrderedDict, defaultdict
 from glob import glob
 from html import unescape
 import argparse
+import pickle
 
 import cchardet
 import regex
@@ -473,12 +474,47 @@ def parse_xml_file_ace05(xml_file, encoding=None):
 
     return reference, entities, relations, events, modalities, attributes, equivalences
 
+def parse_conll_pickle_file(pickle_file):
+    print("Processing pkl file")
+    with open(pickle_file, 'rb') as file:
+        data = pickle.load(file)
+
+    entities = OrderedDict()
+    print(data.keys())
+    for instance in data['train']:
+        tokens = instance['tokens']
+        ner_tags = instance.get('ner', [])
+
+        # Extract entities
+        for start, end, entity_type in ner_tags:
+            entity_id = f"T{start + 1}"  # Assuming entity_id starts from 1
+            entity = ' '.join(tokens[start:end + 1])
+            entities[entity_id] = {
+                "id": entity_id,
+                "type": entity_type,
+                "start": start,
+                "end": end,
+                "ref": entity,
+            }
+            # print(entities[entity_id])
+
+    return entities
+
 
 def build_subtoken_map(corpus_name, corpus_dir, output_dir):
     subtoken_map = defaultdict(list)
 
+    print("***********************Subtoken map build function****************")
+    print(corpus_name,corpus_dir, output_dir)
+
+    entities = OrderedDict()
+    data = ''
+    # with open(os.path.join(corpus_dir,"conll04.pkl"), 'rb') as file:
+    #     # data = pickle.load(file)
+    entities = parse_conll_pickle_file(os.path.join(corpus_dir,"conll04.pkl"))
+    
     for fn in glob(os.path.join(corpus_dir, "**/*.txt"), recursive=True):
-        entities = OrderedDict()
+        # entities = OrderedDict()
 
         basename, _ = os.path.splitext(fn)
 
@@ -536,6 +572,7 @@ def build_subtoken_map(corpus_name, corpus_dir, output_dir):
                 ]
 
                 subtoken_map[full_token].extend(offsets)
+        entities = OrderedDict()    
 
     subtoken_map_fn = os.path.join(output_dir, corpus_name + ".subtoken.map")
     if os.path.exists(subtoken_map_fn):
@@ -920,7 +957,8 @@ def main():
     # Step 1:
     # Collect token which contain entity as substring
     for fn in glob(os.path.join(input_dir, "*")):
-        if os.path.isdir(fn):
+        print("Directory for processing:",fn)
+        if os.path.isdir(fn):   
             print("Building subtoken map: " + os.path.basename(fn))
             build_subtoken_map(os.path.relpath(fn, input_dir), fn, output_dir)
 
